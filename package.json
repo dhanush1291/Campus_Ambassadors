@@ -1,0 +1,32 @@
+{
+  "name": "referral-document-service",
+  "version": "1.0.0",
+  "description": "High-performance Node.js & Express microservice for generating dynamic certificates, offer letters, and ambassador posters",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node scripts/test-endpoints.js",
+    "generate:template": "node scripts/create-poster-template.js"
+  },
+  "keywords": [
+    "express",
+    "pdfkit",
+    "sharp",
+    "microservice",
+    "certificate-generator",
+    "offer-letter",
+    "poster-generator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "pdfkit": "^0.16.0",
+    "sharp": "^0.33.5"
+  }
+}
