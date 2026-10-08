@@ -49,95 +49,97 @@ async function generatePoster(req, res, next) {
     const tWidth = metadata.width || 3375;
     const tHeight = metadata.height || 4219;
 
-    // Sanitize and XML-escape strings to prevent SVG syntax corruption
-    const safeCollegeName = escapeXml(rawCollegeName.toUpperCase());
+    const cleanCollege = (rawCollegeName || '').trim();
+    const safeCollegeName = escapeXml(cleanCollege);
     const safeReferralLink = escapeXml(rawReferralLink);
 
     let svgOverlay;
 
     if (tWidth > 2000) {
       // High-Definition Canvas (3375 x 4219 template)
-      // 1. College Name zone: Center 1687.5, Y: 2805 (Right under "Campus Ambassador of...", above line Y: 2894)
-      let collegeFontSize = 88;
-      if (safeCollegeName.length > 40) {
-        collegeFontSize = 54;
-      } else if (safeCollegeName.length > 30) {
-        collegeFontSize = 66;
-      } else if (safeCollegeName.length > 20) {
-        collegeFontSize = 76;
+      const centerX = tWidth / 2;
+
+      // 1. College Name sizing & placement:
+      // Placed directly above the divider line (Y=2895), leaving "of RGUKT-Srikakulam" untouched above.
+      let collegeFontSize = 130;
+      if (safeCollegeName.length > 35) {
+        collegeFontSize = 86;
+      } else if (safeCollegeName.length > 25) {
+        collegeFontSize = 102;
+      } else if (safeCollegeName.length > 18) {
+        collegeFontSize = 116;
       }
 
-      // 2. Referral Link zone: Inside white registration card at bottom (Y: 3031 to 3556)
-      // Center 1687.5, Y: 3425
-      let linkFontSize = 42;
-      let boxWidth = 1450;
-      if (safeReferralLink.length > 50) {
-        linkFontSize = 28;
-        boxWidth = Math.min(2200, Math.max(1000, safeReferralLink.length * 22 + 160));
-      } else if (safeReferralLink.length > 38) {
-        linkFontSize = 32;
-        boxWidth = Math.min(2000, Math.max(1000, safeReferralLink.length * 25 + 160));
-      } else if (safeReferralLink.length > 26) {
-        linkFontSize = 38;
-        boxWidth = Math.min(1800, Math.max(1000, safeReferralLink.length * 28 + 160));
-      } else {
-        boxWidth = Math.min(1600, Math.max(900, safeReferralLink.length * 32 + 160));
+      // 2. Referral Link sizing & placement:
+      // Inside the white card at the bottom (Y: 3031 to 3556), below "Register for the event here:" (ends Y: 3314).
+      // Centered at buttonY = 3350, height = 160.
+      const linkLength = safeReferralLink.length;
+      const buttonWidth = Math.min(2200, Math.max(1600, linkLength * 42 + 200));
+      const buttonHeight = 160;
+      const buttonY = 3350;
+
+      let linkFontSize = 74;
+      if (linkLength > 52) {
+        linkFontSize = 54;
+      } else if (linkLength > 42) {
+        linkFontSize = 62;
+      } else if (linkLength > 32) {
+        linkFontSize = 68;
       }
 
       svgOverlay = `
       <svg width="${tWidth}" height="${tHeight}" viewBox="0 0 ${tWidth} ${tHeight}" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#4338ca" />
-            <stop offset="100%" stop-color="#312e81" />
+          <linearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3b227c" />
+            <stop offset="100%" stop-color="#26125b" />
           </linearGradient>
         </defs>
 
-        <!-- 1. COLLEGE NAME (Under "Campus Ambassador of..." section, above line Y=2894) -->
+        <!-- 1. COLLEGE NAME DIRECTLY ABOVE THE DIVIDER LINE (Y=2895) -->
         <text 
-          x="${tWidth / 2}" 
-          y="2805" 
-          font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif" 
+          x="${centerX}" 
+          y="2825" 
+          text-anchor="middle" 
+          font-family="'Montserrat', 'Poppins', 'Helvetica Neue', Arial, sans-serif" 
           font-size="${collegeFontSize}" 
           font-weight="900" 
-          fill="#240c4a" 
-          letter-spacing="3" 
-          text-anchor="middle"
+          letter-spacing="2.5" 
+          fill="#2d1767"
         >${safeCollegeName}</text>
 
-        <!-- 2. REFERRAL LINK PILL (Inside the white event card at bottom) -->
-        <g transform="translate(${tWidth / 2}, 3425)">
-          <rect 
-            x="-${boxWidth / 2}" 
-            y="-54" 
-            width="${boxWidth}" 
-            height="108" 
-            rx="54" 
-            fill="url(#linkGrad)" 
-          />
-          <rect 
-            x="-${boxWidth / 2 - 6}" 
-            y="-48" 
-            width="${boxWidth - 12}" 
-            height="96" 
-            rx="48" 
-            fill="none" 
-            stroke="#c7d2fe" 
-            stroke-width="2.5" 
-            stroke-dasharray="10 6" 
-          />
-          <text 
-            x="0" 
-            y="0" 
-            dominant-baseline="central" 
-            font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif" 
-            font-size="${linkFontSize}" 
-            font-weight="800" 
-            fill="#ffffff" 
-            letter-spacing="1.5" 
-            text-anchor="middle"
-          >${safeReferralLink}</text>
-        </g>
+        <!-- 2. REFERRAL LINK PILL BUTTON (Inside the white event card at bottom) -->
+        <rect 
+          x="${centerX - buttonWidth / 2}" 
+          y="${buttonY}" 
+          width="${buttonWidth}" 
+          height="${buttonHeight}" 
+          rx="${buttonHeight / 2}" 
+          fill="url(#btnGrad)" 
+        />
+        <rect 
+          x="${centerX - buttonWidth / 2 + 6}" 
+          y="${buttonY + 6}" 
+          width="${buttonWidth - 12}" 
+          height="${buttonHeight - 12}" 
+          rx="${(buttonHeight - 12) / 2}" 
+          fill="none" 
+          stroke="#a5b4fc" 
+          stroke-width="3" 
+          stroke-dasharray="10 7" 
+          opacity="0.8" 
+        />
+        <text 
+          x="${centerX}" 
+          y="${buttonY + buttonHeight / 2 + 1}" 
+          dominant-baseline="central" 
+          text-anchor="middle" 
+          font-family="'Montserrat', 'Poppins', 'Helvetica Neue', Arial, sans-serif" 
+          font-size="${linkFontSize}" 
+          font-weight="800" 
+          fill="#ffffff" 
+          letter-spacing="1.2"
+        >${safeReferralLink}</text>
       </svg>
       `;
     } else {

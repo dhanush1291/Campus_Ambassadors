@@ -133,25 +133,28 @@ function validatePosterInput(req, res, next) {
   const errors = [];
   const sanitizedBody = {};
 
-  const requiredFields = [
-    { name: 'collegeName', max: 100 },
-    { name: 'referralLink', max: 150 },
-  ];
+  const collegeInput = req.body.collegeName !== undefined ? req.body.collegeName : req.body.name;
+  const linkInput = req.body.referralLink !== undefined ? req.body.referralLink : req.body.referralCode;
 
-  for (const { name: field, max } of requiredFields) {
-    const result = validateField(req.body[field], field, max);
-    if (result.error) {
-      errors.push(result.error);
-    } else {
-      sanitizedBody[field] = result.sanitized;
-    }
+  const collegeRes = validateField(collegeInput, 'collegeName', 100);
+  if (collegeRes.error) {
+    errors.push(collegeRes.error);
+  } else {
+    sanitizedBody.collegeName = collegeRes.sanitized;
+  }
+
+  const linkRes = validateField(linkInput, 'referralLink', 200);
+  if (linkRes.error) {
+    errors.push(linkRes.error);
+  } else {
+    sanitizedBody.referralLink = linkRes.sanitized;
   }
 
   // Optional fields sanitized if provided
   const optionalFields = ['name', 'referralCode', 'level'];
   for (const field of optionalFields) {
     if (req.body[field] !== undefined && req.body[field] !== null) {
-      const optResult = validateField(req.body[field], field, 60);
+      const optResult = validateField(req.body[field], field, 100);
       if (optResult.error) {
         errors.push(optResult.error);
       } else {
