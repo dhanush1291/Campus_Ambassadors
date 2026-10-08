@@ -60,14 +60,12 @@ async function generatePoster(req, res, next) {
       const centerX = tWidth / 2;
 
       // 1. College Name sizing & placement:
-      // Placed directly above the divider line (Y=2895), leaving "of RGUKT-Srikakulam" untouched above.
-      let collegeFontSize = 130;
+      // Placed directly above the divider line (Y=2895), matching scripts/test-above-line.js coordinates
+      let collegeFontSize = 100;
       if (safeCollegeName.length > 35) {
-        collegeFontSize = 86;
+        collegeFontSize = 74;
       } else if (safeCollegeName.length > 25) {
-        collegeFontSize = 102;
-      } else if (safeCollegeName.length > 18) {
-        collegeFontSize = 116;
+        collegeFontSize = 88;
       }
 
       // 2. Referral Link sizing & placement:
@@ -99,12 +97,12 @@ async function generatePoster(req, res, next) {
         <!-- 1. COLLEGE NAME DIRECTLY ABOVE THE DIVIDER LINE (Y=2895) -->
         <text 
           x="${centerX}" 
-          y="2825" 
+          y="2820" 
           text-anchor="middle" 
           font-family="'Montserrat', 'Poppins', 'Helvetica Neue', Arial, sans-serif" 
           font-size="${collegeFontSize}" 
-          font-weight="900" 
-          letter-spacing="2.5" 
+          font-weight="800" 
+          letter-spacing="2" 
           fill="#2d1767"
         >${safeCollegeName}</text>
 
