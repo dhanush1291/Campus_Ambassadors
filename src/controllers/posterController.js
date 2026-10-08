@@ -5,6 +5,21 @@ const config = require('../config');
 const { escapeXml } = require('../utils/helpers');
 
 /**
+ * Resolves the poster template file path reliably across environments.
+ * @returns {string|null} Resolved absolute path or null if not found
+ */
+function getPosterTemplatePath() {
+  const candidates = [
+    path.join(__dirname, '../templates/poster-template.png'),
+    path.join(__dirname, '../templates/poster-bg.png'),
+    config.paths.posterTemplate,
+    config.paths.posterTemplateAlt,
+    path.join(__dirname, '../templates/ambassador-poster-template.png'),
+  ];
+  return candidates.find((p) => p && fs.existsSync(p)) || null;
+}
+
+/**
  * Controller to dynamically overlay name, referral code, and level onto a base template
  * using Sharp and high-precision SVG text composition.
  * 
@@ -14,123 +29,186 @@ const { escapeXml } = require('../utils/helpers');
  */
 async function generatePoster(req, res, next) {
   try {
-    const { name, referralCode, level } = req.body;
+    const { collegeName, referralLink, name, referralCode, level } = req.body;
 
-    const templatePath = config.paths.posterTemplate;
+    const rawCollegeName = collegeName || name || 'Campus Ambassador';
+    const rawReferralLink = referralLink || referralCode || '';
+
+    const templatePath = getPosterTemplatePath();
 
     // Verify template existence
-    if (!fs.existsSync(templatePath)) {
+    if (!templatePath) {
       return res.status(500).json({
         success: false,
-        error: `Poster template not found at ${templatePath}. Ensure template assets are installed.`,
+        error: `Poster template not found. Ensure template assets are installed in src/templates/ (e.g. poster-template.png or poster-bg.png).`,
       });
     }
 
+    // Inspect template dimensions to ensure pixel-perfect SVG coordinates
+    const metadata = await sharp(templatePath).metadata();
+    const tWidth = metadata.width || 3375;
+    const tHeight = metadata.height || 4219;
+
     // Sanitize and XML-escape strings to prevent SVG syntax corruption
-    const safeName = escapeXml(name.toUpperCase());
-    const safeReferralCode = escapeXml(referralCode.toUpperCase());
-    const safeLevel = escapeXml((level || 'Campus Ambassador').toUpperCase());
+    const safeCollegeName = escapeXml(rawCollegeName.toUpperCase());
+    const safeReferralLink = escapeXml(rawReferralLink);
 
-    // Dynamically calculate font size based on name length to maintain perfect typography
-    let nameFontSize = 46;
-    if (safeName.length > 28) {
-      nameFontSize = 32;
-    } else if (safeName.length > 20) {
-      nameFontSize = 38;
-    }
+    let svgOverlay;
 
-    // Dynamic referral code font size
-    let codeFontSize = 42;
-    if (safeReferralCode.length > 20) {
-      codeFontSize = 32;
-    } else if (safeReferralCode.length > 14) {
-      codeFontSize = 36;
-    }
+    if (tWidth > 2000) {
+      // High-Definition Canvas (3375 x 4219 template)
+      // 1. College Name zone: Center 1687.5, Y: 2805 (Right under "Campus Ambassador of...", above line Y: 2894)
+      let collegeFontSize = 88;
+      if (safeCollegeName.length > 40) {
+        collegeFontSize = 54;
+      } else if (safeCollegeName.length > 30) {
+        collegeFontSize = 66;
+      } else if (safeCollegeName.length > 20) {
+        collegeFontSize = 76;
+      }
 
-    // SVG Overlay containing text at exact pixel coordinates (1080 x 1350)
-    // Coordinates match the base template layout:
-    // Name zone: center 540, Y: 635
-    // Level badge zone: center 540, Y: 720
-    // Referral code zone: center 540, Y: 890
-    const svgOverlay = `
-    <svg width="1080" height="1350" viewBox="0 0 1080 1350" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <!-- Gradients and Filters -->
-        <linearGradient id="textGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#fef08a" />
-          <stop offset="50%" stop-color="#facc15" />
-          <stop offset="100%" stop-color="#eab308" />
-        </linearGradient>
+      // 2. Referral Link zone: Inside white registration card at bottom (Y: 3031 to 3556)
+      // Center 1687.5, Y: 3425
+      let linkFontSize = 42;
+      let boxWidth = 1450;
+      if (safeReferralLink.length > 50) {
+        linkFontSize = 28;
+        boxWidth = Math.min(2200, Math.max(1000, safeReferralLink.length * 22 + 160));
+      } else if (safeReferralLink.length > 38) {
+        linkFontSize = 32;
+        boxWidth = Math.min(2000, Math.max(1000, safeReferralLink.length * 25 + 160));
+      } else if (safeReferralLink.length > 26) {
+        linkFontSize = 38;
+        boxWidth = Math.min(1800, Math.max(1000, safeReferralLink.length * 28 + 160));
+      } else {
+        boxWidth = Math.min(1600, Math.max(900, safeReferralLink.length * 32 + 160));
+      }
 
-        <linearGradient id="codeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#38bdf8" />
-          <stop offset="100%" stop-color="#818cf8" />
-        </linearGradient>
+      svgOverlay = `
+      <svg width="${tWidth}" height="${tHeight}" viewBox="0 0 ${tWidth} ${tHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#4338ca" />
+            <stop offset="100%" stop-color="#312e81" />
+          </linearGradient>
+        </defs>
 
-        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
-      <!-- 1. DYNAMIC AMBASSADOR NAME (Exact Coordinates: Center X=540, Y=635) -->
-      <text 
-        x="540" 
-        y="635" 
-        font-family="'Helvetica Neue', Arial, sans-serif" 
-        font-size="${nameFontSize}" 
-        font-weight="900" 
-        fill="#ffffff" 
-        letter-spacing="2" 
-        text-anchor="middle"
-        filter="drop-shadow(0px 4px 12px rgba(0,0,0,0.8))"
-      >${safeName}</text>
-
-      <!-- 2. DYNAMIC TIER / LEVEL BADGE PILL (Exact Coordinates: Center X=540, Y=715) -->
-      <g transform="translate(540, 715)">
-        <rect 
-          x="-160" 
-          y="-18" 
-          width="320" 
-          height="36" 
-          rx="18" 
-          fill="#1e293b" 
-          stroke="#fbbf24" 
-          stroke-width="1.5" 
-        />
-        <circle cx="-130" cy="0" r="4" fill="#fbbf24" />
+        <!-- 1. COLLEGE NAME (Under "Campus Ambassador of..." section, above line Y=2894) -->
         <text 
-          x="0" 
-          y="5" 
-          font-family="'Helvetica Neue', Arial, sans-serif" 
-          font-size="13" 
-          font-weight="800" 
-          fill="url(#textGoldGrad)" 
+          x="${tWidth / 2}" 
+          y="2805" 
+          font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif" 
+          font-size="${collegeFontSize}" 
+          font-weight="900" 
+          fill="#240c4a" 
           letter-spacing="3" 
           text-anchor="middle"
-        >${safeLevel}</text>
-        <circle cx="130" cy="0" r="4" fill="#fbbf24" />
-      </g>
+        >${safeCollegeName}</text>
 
-      <!-- 3. DYNAMIC REFERRAL CODE (Exact Coordinates: Center X=540, Y=898) -->
-      <text 
-        x="540" 
-        y="900" 
-        font-family="'Helvetica Neue', Arial, monospace, sans-serif" 
-        font-size="${codeFontSize}" 
-        font-weight="900" 
-        fill="url(#codeGrad)" 
-        letter-spacing="6" 
-        text-anchor="middle"
-        filter="url(#neonGlow)"
-      >${safeReferralCode}</text>
-    </svg>
-    `;
+        <!-- 2. REFERRAL LINK PILL (Inside the white event card at bottom) -->
+        <g transform="translate(${tWidth / 2}, 3425)">
+          <rect 
+            x="-${boxWidth / 2}" 
+            y="-54" 
+            width="${boxWidth}" 
+            height="108" 
+            rx="54" 
+            fill="url(#linkGrad)" 
+          />
+          <rect 
+            x="-${boxWidth / 2 - 6}" 
+            y="-48" 
+            width="${boxWidth - 12}" 
+            height="96" 
+            rx="48" 
+            fill="none" 
+            stroke="#c7d2fe" 
+            stroke-width="2.5" 
+            stroke-dasharray="10 6" 
+          />
+          <text 
+            x="0" 
+            y="0" 
+            dominant-baseline="central" 
+            font-family="'Montserrat', 'Helvetica Neue', Arial, sans-serif" 
+            font-size="${linkFontSize}" 
+            font-weight="800" 
+            fill="#ffffff" 
+            letter-spacing="1.5" 
+            text-anchor="middle"
+          >${safeReferralLink}</text>
+        </g>
+      </svg>
+      `;
+    } else {
+      // Standard Resolution Canvas (1080 x 1350 template fallback)
+      let collegeFontSize = 42;
+      if (safeCollegeName.length > 30) {
+        collegeFontSize = 30;
+      } else if (safeCollegeName.length > 20) {
+        collegeFontSize = 36;
+      }
 
-    const cleanFilename = `ambassador-poster-${referralCode.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
+      let linkFontSize = 26;
+      if (safeReferralLink.length > 40) {
+        linkFontSize = 20;
+      } else if (safeReferralLink.length > 26) {
+        linkFontSize = 22;
+      }
+
+      const boxWidth = Math.min(800, Math.max(500, safeReferralLink.length * 16 + 80));
+
+      svgOverlay = `
+      <svg width="${tWidth}" height="${tHeight}" viewBox="0 0 ${tWidth} ${tHeight}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#4338ca" />
+            <stop offset="100%" stop-color="#312e81" />
+          </linearGradient>
+        </defs>
+
+        <!-- 1. COLLEGE NAME -->
+        <text 
+          x="${tWidth / 2}" 
+          y="660" 
+          font-family="'Helvetica Neue', Arial, sans-serif" 
+          font-size="${collegeFontSize}" 
+          font-weight="900" 
+          fill="#ffffff" 
+          letter-spacing="2" 
+          text-anchor="middle"
+          filter="drop-shadow(0px 4px 12px rgba(0,0,0,0.8))"
+        >${safeCollegeName}</text>
+
+        <!-- 2. REFERRAL LINK PILL -->
+        <g transform="translate(${tWidth / 2}, 900)">
+          <rect 
+            x="-${boxWidth / 2}" 
+            y="-28" 
+            width="${boxWidth}" 
+            height="56" 
+            rx="28" 
+            fill="url(#linkGrad)" 
+            stroke="#c7d2fe" 
+            stroke-width="1.5" 
+          />
+          <text 
+            x="0" 
+            y="7" 
+            font-family="'Helvetica Neue', Arial, monospace, sans-serif" 
+            font-size="${linkFontSize}" 
+            font-weight="800" 
+            fill="#ffffff" 
+            letter-spacing="1.5" 
+            text-anchor="middle"
+          >${safeReferralLink}</text>
+        </g>
+      </svg>
+      `;
+    }
+
+    const fileToken = (rawCollegeName || rawReferralLink || 'poster').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
+    const cleanFilename = `ambassador-poster-${fileToken}.png`;
 
     // Set download headers
     res.setHeader('Content-Type', 'image/png');
@@ -146,7 +224,7 @@ async function generatePoster(req, res, next) {
           left: 0,
         },
       ])
-      .png({ quality: 95, compressionLevel: 8 });
+      .png({ quality: 90, compressionLevel: 6 });
 
     // Stream the binary image output directly to client
     imageStream.on('error', (err) => {

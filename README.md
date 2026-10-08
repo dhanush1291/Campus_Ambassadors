@@ -126,15 +126,18 @@ Content-Type: application/json
 
 ### 1. Generate Certificate
 * **Endpoint:** `POST /api/generate-certificate`
-* **Description:** Generates a landscape A4 PDF Certificate of Appreciation with gold filigree borders, recipient details, tier badge, conferment date, unique certificate hash, and verification seal.
+* **Description:** Loads the custom landscape certificate template (`src/templates/certificate-template.png` or `.jpg`, 6250x4419) and renders the user's `name` centered under "Awarded to" and `date` at the bottom-right date line via PDFKit absolute coordinates.
 * **Response:** Direct vector PDF download stream (`application/pdf`).
+
+#### Required Inputs
+* `name` (string, max 60 chars) - Recipient name
+* `date` (string, max 50 chars) - Conferment date (e.g., "October 8, 2026")
 
 #### Request Body
 ```json
 {
   "name": "Sarah Connor",
-  "referralCode": "SARAH-LEAD-2026",
-  "level": "Diamond Ambassador"
+  "date": "October 8, 2026"
 }
 ```
 
@@ -143,7 +146,7 @@ Content-Type: application/json
 curl -X POST http://localhost:5000/api/generate-certificate \
   -H "Authorization: Bearer super-secret-referral-api-key-2026" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Sarah Connor", "referralCode": "SARAH-LEAD-2026", "level": "Diamond Ambassador"}' \
+  -d '{"name": "Sarah Connor", "date": "October 8, 2026"}' \
   --output certificate.pdf
 ```
 
@@ -151,16 +154,16 @@ curl -X POST http://localhost:5000/api/generate-certificate \
 
 ### 2. Generate Offer Letter
 * **Endpoint:** `POST /api/generate-offer-letter`
-* **Description:** Generates a portrait A4 multi-section official Campus Ambassador offer letter containing company letterhead, appointment details, tracking referral code, core responsibilities, tiered benefits, code of conduct, and executive signature block.
+* **Description:** Builds the portrait A4 offer letter layout on letterhead (`src/templates/offer-letter-bg.png`), injecting `name` dynamically right after "Dear" (`Dear [Name],`), while preserving the official RGUKT Srikakulam / Plus Qiskit Fall Fest 2026 text block, role overview, and rewards.
 * **Response:** Direct vector PDF download stream (`application/pdf`).
+
+#### Required Inputs
+* `name` (string, max 60 chars) - Appointed ambassador name
 
 #### Request Body
 ```json
 {
-  "name": "Sarah Connor",
-  "role": "Lead Campus Ambassador",
-  "startDate": "November 1, 2026",
-  "referralCode": "SARAH-LEAD-2026"
+  "name": "Sarah Connor"
 }
 ```
 
@@ -169,23 +172,26 @@ curl -X POST http://localhost:5000/api/generate-certificate \
 curl -X POST http://localhost:5000/api/generate-offer-letter \
   -H "Authorization: Bearer super-secret-referral-api-key-2026" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Sarah Connor", "role": "Lead Campus Ambassador", "startDate": "November 1, 2026", "referralCode": "SARAH-LEAD-2026"}' \
+  -d '{"name": "Sarah Connor"}' \
   --output offer-letter.pdf
 ```
 
 ---
 
-### 3. Generate Ambassador Poster
+### 3. Generate Campus Ambassador Poster
 * **Endpoint:** `POST /api/generate-poster`
-* **Description:** Overlays the user's name, referral code, and tier badge dynamically onto the pre-existing 1080x1350 template image at precise pixel coordinates using Sharp.
+* **Description:** Loads the high-resolution poster background template (`src/templates/poster-template.png`, 3375x4219) using `sharp` and composites SVG overlays: inserting `collegeName` cleanly into the placeholder right under "Campus Ambassador of..." and `referralLink` cleanly inside the white card at the bottom with theme colors and XML escaping.
 * **Response:** Binary image stream (`image/png`).
+
+#### Required Inputs
+* `collegeName` (string, max 100 chars) - Institution name (e.g., "RGUKT - SRIKAKULAM")
+* `referralLink` (string, max 150 chars) - Unique registration URL
 
 #### Request Body
 ```json
 {
-  "name": "Sarah Connor",
-  "referralCode": "SARAH-LEAD-2026",
-  "level": "Diamond Ambassador"
+  "collegeName": "RGUKT - SRIKAKULAM",
+  "referralLink": "https://qffrguktsklm.in/ref/SARAH-2026"
 }
 ```
 
@@ -194,7 +200,7 @@ curl -X POST http://localhost:5000/api/generate-offer-letter \
 curl -X POST http://localhost:5000/api/generate-poster \
   -H "Authorization: Bearer super-secret-referral-api-key-2026" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Sarah Connor", "referralCode": "SARAH-LEAD-2026", "level": "Diamond Ambassador"}' \
+  -d '{"collegeName": "RGUKT - SRIKAKULAM", "referralLink": "https://qffrguktsklm.in/ref/SARAH-2026"}' \
   --output ambassador-poster.png
 ```
 

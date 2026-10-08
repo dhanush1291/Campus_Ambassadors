@@ -1,9 +1,27 @@
+const fs = require('fs');
+const path = require('path');
 const PDFDocument = require('pdfkit');
 const config = require('../config');
 const { formatDate, generateReferenceNumber } = require('../utils/helpers');
 
 /**
+ * Resolves the certificate template graphic path reliably across environments.
+ * @returns {string|null} Resolved absolute path or null if not found
+ */
+function getCertificateTemplatePath() {
+  const candidates = [
+    path.join(__dirname, '../templates/certificate-template.png'),
+    path.join(__dirname, '../templates/certificate-bg.png'),
+    path.join(__dirname, '../templates/certificate-bg.jpg'),
+    config.paths.certificateTemplate,
+    config.paths.certificateTemplateAlt,
+  ];
+  return candidates.find((p) => p && fs.existsSync(p)) || null;
+}
+
+/**
  * Controller to generate and stream a landscape A4 Certificate of Excellence PDF.
+ * Uses custom high-resolution background graphic template with precise dynamic field overlays.
  * 
  * @param {import('express').Request} req - Express request
  * @param {import('express').Response} res - Express response
@@ -11,22 +29,22 @@ const { formatDate, generateReferenceNumber } = require('../utils/helpers');
  */
 function generateCertificate(req, res, next) {
   try {
-    const { name, referralCode, level } = req.body;
+    const { name, date, referralCode, level } = req.body;
 
-    const formattedDate = formatDate(new Date());
-    const certificateId = generateReferenceNumber('CERT', referralCode);
-    const cleanFilename = `certificate-${referralCode.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const formattedDate = date || formatDate(new Date());
+    const certificateId = generateReferenceNumber('CERT', referralCode || name);
+    const cleanFilename = `certificate-${name.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
 
-    // Initialize landscape A4 PDF: 841.89 pt x 595.28 pt
+    // Initialize landscape A4 PDF: 841.89 pt x 595.28 pt (margin 0 for full bleed background)
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
-      margin: 40,
+      margin: 0,
       info: {
-        Title: `Certificate of Recognition - ${name}`,
+        Title: `Certificate of Appreciation - ${name}`,
         Author: config.company.name,
-        Subject: 'Campus Ambassador Referral Program Certificate',
-        Keywords: 'certificate, ambassador, referral, honor',
+        Subject: 'Campus Ambassador Certificate',
+        Keywords: 'certificate, ambassador, referral, quantum, honors',
       },
     });
 
@@ -50,250 +68,94 @@ function generateCertificate(req, res, next) {
     const pageWidth = doc.page.width;   // 841.89
     const pageHeight = doc.page.height; // 595.28
 
-    // ==========================================
-    // 1. BACKGROUND & BORDERS
-    // ==========================================
-    // Subtle background parchment fill
-    doc.rect(0, 0, pageWidth, pageHeight)
-       .fillColor('#fcfbf7')
-       .fill();
+    const templatePath = getCertificateTemplatePath();
 
-    // Outer Navy Border
-    doc.rect(25, 25, pageWidth - 50, pageHeight - 50)
-       .lineWidth(3)
-       .strokeColor('#0f172a')
-       .stroke();
+    if (templatePath) {
+      // =========================================================================
+      // 1. CUSTOM TEMPLATE BACKGROUND INTEGRATION (Full landscape A4 coverage)
+      // =========================================================================
+      doc.image(templatePath, 0, 0, { width: pageWidth, height: pageHeight });
 
-    // Inner Elegant Gold Border
-    doc.rect(33, 33, pageWidth - 66, pageHeight - 66)
-       .lineWidth(1)
-       .strokeColor('#d97706')
-       .stroke();
+      // =========================================================================
+      // 2. PRECISE DYNAMIC OVERLAYS OVER DESIGNATED BLANK SLOTS
+      // =========================================================================
 
-    // Secondary decorative thin inner border
-    doc.rect(37, 37, pageWidth - 74, pageHeight - 74)
-       .lineWidth(0.5)
-       .strokeColor('#e2e8f0')
-       .stroke();
+      // Slot 1: Recipient Name (Centered under 'Awarded to' over the underline at Y=333.6 pt)
+      // Available width: X=325.3 to X=699.1 (width: 373.8 pt)
+      let nameFontSize = 32;
+      if (name.length > 28) {
+        nameFontSize = 22;
+      } else if (name.length > 20) {
+        nameFontSize = 26;
+      } else if (name.length > 15) {
+        nameFontSize = 28;
+      }
 
-    // Corner Geometric Ornaments
-    const cornerSize = 24;
-    const corners = [
-      { x: 33, y: 33 },
-      { x: pageWidth - 33 - cornerSize, y: 33 },
-      { x: 33, y: pageHeight - 33 - cornerSize },
-      { x: pageWidth - 33 - cornerSize, y: pageHeight - 33 - cornerSize },
-    ];
+      const nameSlotX = 325.3;
+      const nameSlotWidth = 373.8;
 
-    corners.forEach((c) => {
-      doc.rect(c.x, c.y, cornerSize, cornerSize)
-         .fillColor('#0f172a')
-         .fill();
-      doc.rect(c.x + 4, c.y + 4, cornerSize - 8, cornerSize - 8)
-         .lineWidth(1)
-         .strokeColor('#fbbf24')
-         .stroke();
-    });
-
-    // ==========================================
-    // 2. HEADER & BRANDING
-    // ==========================================
-    doc.fillColor('#475569')
-       .font('Helvetica-Bold')
-       .fontSize(11)
-       .text(config.company.name.toUpperCase(), 0, 68, {
-         align: 'center',
-         characterSpacing: 4,
-       });
-
-    doc.fillColor('#0f172a')
-       .font('Helvetica-Bold')
-       .fontSize(28)
-       .text('CERTIFICATE OF APPRECIATION', 0, 95, {
-         align: 'center',
-         characterSpacing: 2,
-       });
-
-    doc.fillColor('#d97706')
-       .font('Helvetica-Bold')
-       .fontSize(12)
-       .text('CAMPUS AMBASSADOR REFERRAL PROGRAM', 0, 134, {
-         align: 'center',
-         characterSpacing: 3,
-       });
-
-    // Decorative header ribbon divider
-    doc.moveTo(250, 158)
-       .lineTo(pageWidth - 250, 158)
-       .lineWidth(1.2)
-       .strokeColor('#cbd5e1')
-       .stroke();
-
-    // Small Gold Diamond at center of divider
-    const centerX = pageWidth / 2;
-    doc.polygon(
-      [centerX, 153],
-      [centerX + 5, 158],
-      [centerX, 163],
-      [centerX - 5, 158]
-    ).fillColor('#d97706').fill();
-
-    // ==========================================
-    // 3. PRESENTATION TEXT & RECIPIENT
-    // ==========================================
-    doc.fillColor('#64748b')
-       .font('Helvetica')
-       .fontSize(13)
-       .text('THIS IS PROUDLY PRESENTED TO', 0, 185, {
-         align: 'center',
-         characterSpacing: 2,
-       });
-
-    // Recipient Name
-    doc.fillColor('#0f172a')
-       .font('Helvetica-Bold')
-       .fontSize(32)
-       .text(name, 0, 218, {
-         align: 'center',
-       });
-
-    // Name underline with ornamental flourishes
-    const nameUnderlineWidth = Math.min(Math.max(name.length * 16, 260), 500);
-    doc.moveTo((pageWidth - nameUnderlineWidth) / 2, 262)
-       .lineTo((pageWidth + nameUnderlineWidth) / 2, 262)
-       .lineWidth(1.5)
-       .strokeColor('#0f172a')
-       .stroke();
-
-    // Recipient Level Badge
-    doc.roundedRect(centerX - 110, 276, 220, 26, 13)
-       .fillColor('#f1f5f9')
-       .strokeColor('#cbd5e1')
-       .lineWidth(1)
-       .fillAndStroke();
-
-    doc.fillColor('#1e293b')
-       .font('Helvetica-Bold')
-       .fontSize(10)
-       .text(`TIER LEVEL: ${level.toUpperCase()}`, 0, 284, {
-         align: 'center',
-         characterSpacing: 1.5,
-       });
-
-    // Body Citation Text
-    doc.fillColor('#334155')
-       .font('Helvetica')
-       .fontSize(12)
-       .text(
-         `For outstanding commitment, exceptional leadership, and valuable community impact demonstrated through successful student advocacy in the ${config.company.name} referral network.`,
-         120,
-         320,
-         {
+      doc.fillColor('#0f172a')
+         .font('Helvetica-Bold')
+         .fontSize(nameFontSize)
+         .text(name, nameSlotX, 292, {
+           width: nameSlotWidth,
            align: 'center',
-           lineGap: 4,
-           width: pageWidth - 240,
-         }
-       );
+         });
 
-    // ==========================================
-    // 4. VERIFICATION SEAL & CREDENTIAL DETAILS
-    // ==========================================
-    const sealX = centerX;
-    const sealY = 440;
+      // Optional Slot 2: Tier / Level Indicator (Positioned right beneath the name line if provided)
+      if (level) {
+        const safeLevel = level.toUpperCase();
+        doc.fillColor('#4338ca')
+           .font('Helvetica-Bold')
+           .fontSize(8.5)
+           .text(`TIER LEVEL: ${safeLevel}`, nameSlotX, 340, {
+             width: nameSlotWidth,
+             align: 'center',
+             characterSpacing: 1.5,
+           });
+      }
 
-    // Draw Vector Seal
-    doc.circle(sealX, sealY, 36)
-       .lineWidth(2)
-       .strokeColor('#d97706')
-       .stroke();
+      // Slot 3: Date of Conferment (Rendered at the bottom-right signature/date line)
+      doc.fillColor('#0f172a')
+         .font('Helvetica-Bold')
+         .fontSize(10)
+         .text(formattedDate, 735, 547);
 
-    doc.circle(sealX, sealY, 31)
-       .lineWidth(0.8)
-       .strokeColor('#fbbf24')
-       .stroke();
+      // Optional Slot 4: Referral Code & Certificate Verification ID (In central gap between signature & date)
+      if (referralCode) {
+        doc.fillColor('#64748b')
+           .font('Helvetica-Bold')
+           .fontSize(8)
+           .text(`REF: ${referralCode}`, 470, 538, { width: 220, align: 'center' })
+           .font('Helvetica')
+           .fontSize(7)
+           .text(`CERT ID: ${certificateId}`, 470, 550, { width: 220, align: 'center' });
+      }
 
-    // Seal Center Star
-    doc.fillColor('#d97706')
-       .font('Helvetica-Bold')
-       .fontSize(18)
-       .text('★', sealX - 9, sealY - 14, { width: 18, align: 'center' });
+      // Security / Integrity Footer watermark
+      doc.fillColor('#94a3b8')
+         .font('Helvetica')
+         .fontSize(6.5)
+         .text(
+           `Verified Document Hash: ${certificateId} • RGUKT Srikakulam Qiskit Fall Fest '26 • ${config.company.website}`,
+           0,
+           580,
+           { width: pageWidth, align: 'center' }
+         );
+    } else {
+      // Graceful fallback: Programmatic styling if template file is missing
+      doc.rect(0, 0, pageWidth, pageHeight).fillColor('#fcfbf7').fill();
+      doc.rect(25, 25, pageWidth - 50, pageHeight - 50).lineWidth(3).strokeColor('#0f172a').stroke();
+      doc.rect(33, 33, pageWidth - 66, pageHeight - 66).lineWidth(1).strokeColor('#d97706').stroke();
 
-    doc.fillColor('#b45309')
-       .font('Helvetica-Bold')
-       .fontSize(6)
-       .text('OFFICIAL VERIFIED SEAL', sealX - 40, sealY + 8, {
-         width: 80,
-         align: 'center',
-         characterSpacing: 0.5,
-       });
-
-    // Left Column: Verification & Date
-    const leftColX = 90;
-    const detailsY = 415;
-
-    doc.fillColor('#64748b')
-       .font('Helvetica')
-       .fontSize(9)
-       .text('DATE OF CONFERMENT', leftColX, detailsY);
-
-    doc.fillColor('#0f172a')
-       .font('Helvetica-Bold')
-       .fontSize(11)
-       .text(formattedDate, leftColX, detailsY + 14);
-
-    doc.fillColor('#64748b')
-       .font('Helvetica')
-       .fontSize(9)
-       .text('REFERRAL CODE', leftColX, detailsY + 36);
-
-    doc.fillColor('#0369a1')
-       .font('Helvetica-Bold')
-       .fontSize(11)
-       .text(referralCode, leftColX, detailsY + 50);
-
-    doc.fillColor('#94a3b8')
-       .font('Helvetica')
-       .fontSize(7.5)
-       .text(`CERT ID: ${certificateId}`, leftColX, detailsY + 70);
-
-    // Right Column: Signatures
-    const rightColX = pageWidth - 240;
-
-    // Signature Line
-    doc.moveTo(rightColX, detailsY + 45)
-       .lineTo(rightColX + 160, detailsY + 45)
-       .lineWidth(1)
-       .strokeColor('#94a3b8')
-       .stroke();
-
-    // Stylized signature simulation
-    doc.fillColor('#1e293b')
-       .font('Helvetica-Bold')
-       .fontSize(11)
-       .text('Marcus Sterling', rightColX, detailsY + 52);
-
-    doc.fillColor('#64748b')
-       .font('Helvetica')
-       .fontSize(9)
-       .text('Director of Global Partnerships', rightColX, detailsY + 66);
-
-    doc.fillColor('#94a3b8')
-       .font('Helvetica')
-       .fontSize(8)
-       .text(config.company.name, rightColX, detailsY + 78);
-
-    // Bottom Security Banner
-    doc.fillColor('#94a3b8')
-       .font('Helvetica')
-       .fontSize(7.5)
-       .text(
-         `Secure Document Verification Hash: ${certificateId} • Issued by ${config.company.name} • ${config.company.website}`,
-         0,
-         pageHeight - 48,
-         {
-           align: 'center',
-         }
-       );
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(28).text('CERTIFICATE OF APPRECIATION', 0, 100, { align: 'center' });
+      doc.fillColor('#64748b').font('Helvetica').fontSize(13).text('THIS IS PROUDLY PRESENTED TO', 0, 185, { align: 'center' });
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(32).text(name, 0, 220, { align: 'center' });
+      doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(10).text(`TIER LEVEL: ${level.toUpperCase()}`, 0, 284, { align: 'center' });
+      doc.fillColor('#334155').font('Helvetica').fontSize(12).text(`For outstanding commitment in the ${config.company.name} referral network.`, 120, 320, { align: 'center', width: pageWidth - 240 });
+      doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(11).text(formattedDate, 90, 430);
+      doc.fillColor('#0369a1').font('Helvetica-Bold').fontSize(11).text(referralCode, 90, 465);
+    }
 
     // Finalize the PDF stream
     doc.end();

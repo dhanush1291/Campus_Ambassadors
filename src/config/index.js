@@ -27,9 +27,16 @@ const config = {
 
   // Template Paths
   paths: {
-    templatesDir: path.resolve(__dirname, '../templates'),
-    posterTemplate: path.resolve(__dirname, '../templates/ambassador-poster-template.png'),
-    assetsDir: path.resolve(__dirname, '../templates/assets'),
+    templatesDir: path.join(__dirname, '../templates'),
+    posterTemplate: path.join(__dirname, '../templates/poster-template.png'),
+    posterTemplateAlt: path.join(__dirname, '../templates/poster-bg.png'),
+    certificateTemplate: path.join(__dirname, '../templates/certificate-template.png'),
+    certificateTemplateAlt: path.join(__dirname, '../templates/certificate-bg.png'),
+    offerLetterBg: path.join(__dirname, '../templates/offer-letter-bg.png'),
+    offerLetterTemplate: path.join(__dirname, '../templates/offer-letter-template.png'),
+    offerLetterHeader: path.join(__dirname, '../templates/offer-letter-header.png'),
+    offerLetterFooter: path.join(__dirname, '../templates/offer-letter-footer.png'),
+    assetsDir: path.join(__dirname, '../templates/assets'),
   },
 };
 

@@ -27,6 +27,7 @@ const corsOptions = {
   },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Content-Disposition', 'X-Document-Type', 'X-Reference-Number', 'X-Certificate-Id'],
   credentials: true,
   maxAge: 86400, // 24 hours preflight cache
 };
@@ -76,7 +77,7 @@ app.use(errorHandler);
 // ==========================================
 // 5. SERVER BOOTSTRAP
 // ==========================================
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   const server = app.listen(config.port, () => {
     console.log(`=======================================================`);
     console.log(`🚀 Document Generation Microservice is running!`);

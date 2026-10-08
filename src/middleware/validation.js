@@ -37,19 +37,37 @@ function validateField(value, fieldName, maxLength = MAX_CHAR_LENGTH) {
 
 /**
  * Validation middleware for Certificate generation
- * Body expects: { name, referralCode, level }
+ * Required: name, date
+ * Optional: referralCode, level
  */
 function validateCertificateInput(req, res, next) {
   const errors = [];
   const sanitizedBody = {};
 
-  const fields = ['name', 'referralCode', 'level'];
-  for (const field of fields) {
-    const result = validateField(req.body[field], field, MAX_CHAR_LENGTH);
+  const requiredFields = [
+    { name: 'name', max: 60 },
+    { name: 'date', max: 50 },
+  ];
+
+  for (const { name: field, max } of requiredFields) {
+    const result = validateField(req.body[field], field, max);
     if (result.error) {
       errors.push(result.error);
     } else {
       sanitizedBody[field] = result.sanitized;
+    }
+  }
+
+  // Optional fields sanitized if provided
+  const optionalFields = ['referralCode', 'level'];
+  for (const field of optionalFields) {
+    if (req.body[field] !== undefined && req.body[field] !== null) {
+      const optResult = validateField(req.body[field], field, 60);
+      if (optResult.error) {
+        errors.push(optResult.error);
+      } else {
+        sanitizedBody[field] = optResult.sanitized;
+      }
     }
   }
 
@@ -61,26 +79,36 @@ function validateCertificateInput(req, res, next) {
     });
   }
 
-  // Assign sanitized values back to req.body
   req.body = { ...req.body, ...sanitizedBody };
   next();
 }
 
 /**
  * Validation middleware for Offer Letter generation
- * Body expects: { name, role, startDate, referralCode }
+ * Required: name
+ * Optional: role, startDate, referralCode
  */
 function validateOfferLetterInput(req, res, next) {
   const errors = [];
   const sanitizedBody = {};
 
-  const fields = ['name', 'role', 'startDate', 'referralCode'];
-  for (const field of fields) {
-    const result = validateField(req.body[field], field, MAX_CHAR_LENGTH);
-    if (result.error) {
-      errors.push(result.error);
-    } else {
-      sanitizedBody[field] = result.sanitized;
+  const nameResult = validateField(req.body.name, 'name', 60);
+  if (nameResult.error) {
+    errors.push(nameResult.error);
+  } else {
+    sanitizedBody.name = nameResult.sanitized;
+  }
+
+  // Optional fields sanitized if provided
+  const optionalFields = ['role', 'startDate', 'referralCode'];
+  for (const field of optionalFields) {
+    if (req.body[field] !== undefined && req.body[field] !== null) {
+      const optResult = validateField(req.body[field], field, 60);
+      if (optResult.error) {
+        errors.push(optResult.error);
+      } else {
+        sanitizedBody[field] = optResult.sanitized;
+      }
     }
   }
 
@@ -98,15 +126,20 @@ function validateOfferLetterInput(req, res, next) {
 
 /**
  * Validation middleware for Ambassador Poster generation
- * Body expects: { name, referralCode, level }
+ * Required: collegeName, referralLink
+ * Optional: name, referralCode, level
  */
 function validatePosterInput(req, res, next) {
   const errors = [];
   const sanitizedBody = {};
 
-  const requiredFields = ['name', 'referralCode'];
-  for (const field of requiredFields) {
-    const result = validateField(req.body[field], field, MAX_CHAR_LENGTH);
+  const requiredFields = [
+    { name: 'collegeName', max: 100 },
+    { name: 'referralLink', max: 150 },
+  ];
+
+  for (const { name: field, max } of requiredFields) {
+    const result = validateField(req.body[field], field, max);
     if (result.error) {
       errors.push(result.error);
     } else {
@@ -114,16 +147,17 @@ function validatePosterInput(req, res, next) {
     }
   }
 
-  // Level is optional or defaults to 'Campus Ambassador' if not provided
-  if (req.body.level !== undefined && req.body.level !== null) {
-    const levelResult = validateField(req.body.level, 'level', MAX_CHAR_LENGTH);
-    if (levelResult.error) {
-      errors.push(levelResult.error);
-    } else {
-      sanitizedBody.level = levelResult.sanitized;
+  // Optional fields sanitized if provided
+  const optionalFields = ['name', 'referralCode', 'level'];
+  for (const field of optionalFields) {
+    if (req.body[field] !== undefined && req.body[field] !== null) {
+      const optResult = validateField(req.body[field], field, 60);
+      if (optResult.error) {
+        errors.push(optResult.error);
+      } else {
+        sanitizedBody[field] = optResult.sanitized;
+      }
     }
-  } else {
-    sanitizedBody.level = 'Campus Ambassador';
   }
 
   if (errors.length > 0) {

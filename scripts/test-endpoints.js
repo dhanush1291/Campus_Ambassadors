@@ -111,24 +111,40 @@ async function runTests() {
 
     // 4. Validation: Missing Fields
     console.log('\n--- 3. Testing Input Validation ---');
-    const missingFieldRes = await makeRequest({
+    const missingCertFieldRes = await makeRequest({
       method: 'POST',
       path: '/api/generate-certificate',
       headers: authHeaders,
-      body: { name: 'Alice Smith' }, // Missing referralCode and level
+      body: { name: 'Alice Smith' }, // Missing required 'date'
     });
-    assert(missingFieldRes.statusCode === 400, 'Rejects payload with missing fields with 400');
-    assert(missingFieldRes.json?.details?.length > 0, 'Returns validation details in error response');
+    assert(missingCertFieldRes.statusCode === 400, 'Rejects certificate missing required date with 400');
+    assert(missingCertFieldRes.json?.details?.length > 0, 'Returns validation details in error response');
 
-    // 5. Validation: Character Limit Exceeded (> 50 chars)
-    const longName = 'A'.repeat(55);
+    const missingPosterFieldRes = await makeRequest({
+      method: 'POST',
+      path: '/api/generate-poster',
+      headers: authHeaders,
+      body: { collegeName: 'RGUKT' }, // Missing required 'referralLink'
+    });
+    assert(missingPosterFieldRes.statusCode === 400, 'Rejects poster missing required referralLink with 400');
+
+    const missingOfferFieldRes = await makeRequest({
+      method: 'POST',
+      path: '/api/generate-offer-letter',
+      headers: authHeaders,
+      body: {}, // Missing required 'name'
+    });
+    assert(missingOfferFieldRes.statusCode === 400, 'Rejects offer letter missing required name with 400');
+
+    // 5. Validation: Character Limit Exceeded (> 60 chars)
+    const longName = 'A'.repeat(65);
     const charLimitRes = await makeRequest({
       method: 'POST',
       path: '/api/generate-certificate',
       headers: authHeaders,
-      body: { name: longName, referralCode: 'ALICE2026', level: 'Platinum' },
+      body: { name: longName, date: 'October 8, 2026' },
     });
-    assert(charLimitRes.statusCode === 400, 'Rejects payload exceeding 50 characters with 400');
+    assert(charLimitRes.statusCode === 400, 'Rejects payload exceeding maximum character length with 400');
 
     // 6. Generate Certificate (Landscape A4 PDF)
     console.log('\n--- 4. Testing Certificate Generation ---');
@@ -138,6 +154,7 @@ async function runTests() {
       headers: authHeaders,
       body: {
         name: 'Sarah Connor',
+        date: 'October 8, 2026',
         referralCode: 'SARAH-LEAD-2026',
         level: 'Diamond Ambassador',
       },
@@ -147,10 +164,27 @@ async function runTests() {
       certRes.headers['content-type'] === 'application/pdf',
       'Certificate response Content-Type is application/pdf'
     );
-    assert(certRes.buffer.length > 2000, `Certificate PDF generated (${certRes.buffer.length} bytes)`);
+    assert(certRes.buffer.length > 50000, `Certificate PDF generated (${certRes.buffer.length} bytes)`);
 
-    const certFilePath = path.join(OUTPUT_DIR, 'sample-certificate.pdf');
-    fs.writeFileSync(certFilePath, certRes.buffer);
+function safeWriteFile(filePath, buffer) {
+  try {
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
+  } catch (err) {
+    if (err.code === 'EBUSY') {
+      const altPath = filePath.replace(/(\.[^.]+)$/, `-latest$1`);
+      try {
+        fs.writeFileSync(altPath, buffer);
+        return altPath;
+      } catch {
+        return filePath;
+      }
+    }
+    throw err;
+  }
+}
+
+    const certFilePath = safeWriteFile(path.join(OUTPUT_DIR, 'sample-certificate.pdf'), certRes.buffer);
     console.log(`Saved sample certificate to: ${certFilePath}`);
 
     // 7. Generate Offer Letter (Portrait A4 PDF)
@@ -161,8 +195,8 @@ async function runTests() {
       headers: authHeaders,
       body: {
         name: 'Sarah Connor',
-        role: 'Lead Campus Ambassador',
-        startDate: 'November 1, 2026',
+        role: 'Campus Ambassador',
+        startDate: 'October 10, 2026',
         referralCode: 'SARAH-LEAD-2026',
       },
     });
@@ -171,10 +205,9 @@ async function runTests() {
       offerRes.headers['content-type'] === 'application/pdf',
       'Offer letter response Content-Type is application/pdf'
     );
-    assert(offerRes.buffer.length > 5000, `Offer Letter PDF generated (${offerRes.buffer.length} bytes)`);
+    assert(offerRes.buffer.length > 50000, `Offer Letter PDF generated (${offerRes.buffer.length} bytes)`);
 
-    const offerFilePath = path.join(OUTPUT_DIR, 'sample-offer-letter.pdf');
-    fs.writeFileSync(offerFilePath, offerRes.buffer);
+    const offerFilePath = safeWriteFile(path.join(OUTPUT_DIR, 'sample-offer-letter.pdf'), offerRes.buffer);
     console.log(`Saved sample offer letter to: ${offerFilePath}`);
 
     // 8. Generate Poster (Overlay dynamic text on base PNG)
@@ -184,9 +217,8 @@ async function runTests() {
       path: '/api/generate-poster',
       headers: authHeaders,
       body: {
-        name: 'Sarah Connor',
-        referralCode: 'SARAH-LEAD-2026',
-        level: 'Diamond Ambassador',
+        collegeName: 'RGUKT - SRIKAKULAM',
+        referralLink: 'https://qffrguktsklm.in/ref/SARAH-2026',
       },
     });
     assert(posterRes.statusCode === 200, 'POST /api/generate-poster returns 200');
@@ -194,10 +226,9 @@ async function runTests() {
       posterRes.headers['content-type'] === 'image/png',
       'Poster response Content-Type is image/png'
     );
-    assert(posterRes.buffer.length > 50000, `Poster PNG generated (${posterRes.buffer.length} bytes)`);
+    assert(posterRes.buffer.length > 500000, `Poster PNG generated (${posterRes.buffer.length} bytes)`);
 
-    const posterFilePath = path.join(OUTPUT_DIR, 'sample-poster.png');
-    fs.writeFileSync(posterFilePath, posterRes.buffer);
+    const posterFilePath = safeWriteFile(path.join(OUTPUT_DIR, 'sample-poster.png'), posterRes.buffer);
     console.log(`Saved sample poster to: ${posterFilePath}`);
 
     console.log('\n========================================');
